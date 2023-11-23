@@ -1,0 +1,83 @@
+package vn.edu.vnua.fita.student.term.service;
+
+import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Service;
+import vn.edu.vnua.fita.student.term.entity.Term;
+import vn.edu.vnua.fita.student.term.repository.CustomTermRepository;
+import vn.edu.vnua.fita.student.term.repository.TermRepository;
+import vn.edu.vnua.fita.student.term.request.CreateTermRequest;
+import vn.edu.vnua.fita.student.term.request.GetTermListRequest;
+
+import java.util.List;
+
+@Service
+@RequiredArgsConstructor
+public class TermManager implements ITermService {
+    private final TermRepository termRepository;
+    private final String termHadExisted = "Mã học kỳ đã tồn tại trong hệ thống";
+    private final String termNotFound = "Học kỳ %s không tồn tại trong hệ thống";
+    private final String cannotDelete = "Học kỳ này đang ràng buộc với bảng điểm, vui lòng xoá hết điểm trong học kỳ này trước khi tiến hành xoá học kỳ";
+
+
+    @Override
+    public Page<Term> getTermList(GetTermListRequest request) {
+        Specification<Term> specification = CustomTermRepository.filterTermList(
+                request.getId()
+        );
+        return termRepository.findAll(specification, PageRequest.of(request.getPage() - 1, request.getSize()));
+    }
+
+    @Override
+    public List<Term> getAllTerm() {
+        return termRepository.findAll(Sort.by("id").ascending());
+    }
+
+    @Override
+    public Term createTerm(CreateTermRequest request) {
+        if (termRepository.existsById(request.getId())) {
+            throw new RuntimeException(termHadExisted);
+        }
+        return termRepository.saveAndFlush(buildTerm(request.getId()));
+    }
+
+    @Override
+    public Term deleteTerm(String id) {
+        try {
+            Term term = termRepository.findById(id).orElseThrow(() -> new RuntimeException(String.format(termNotFound, id)));
+            termRepository.deleteById(id);
+            return term;
+        } catch (
+                DataIntegrityViolationException e) {
+            throw new RuntimeException(cannotDelete);
+        }
+    }
+
+    @Override
+    @Scheduled(cron = "0 0 0 1 5,12 ?")
+//    @Scheduled(cron = "15 * * * * ?")
+    public void createTermPeriodic() {
+        String termId = termRepository.findFirstByOrderByIdDesc().getId();
+        int year = Integer.parseInt(termId.substring(0, termId.length() - 1));
+        int term = Integer.parseInt(termId.substring(termId.length() - 1));
+        if (term == 1) {
+            String newTermId = year + "2";
+            termRepository.saveAndFlush(buildTerm(newTermId));
+        } else if (term == 2) {
+            String newTermId = (year + 1) + "1";
+            termRepository.saveAndFlush(buildTerm(newTermId));
+        }
+    }
+
+    private Term buildTerm(String termId) {
+        return Term.builder()
+                .id(termId)
+                .name("Học kỳ " + termId.charAt(termId.length() - 1) + " - năm " + termId.substring(0, termId.length() - 1))
+                .build();
+    }
+}

@@ -1,0 +1,24 @@
+package vn.edu.vnua.fita.student.course.repository;
+
+import jakarta.persistence.criteria.Predicate;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.stereotype.Repository;
+import org.springframework.util.StringUtils;
+import vn.edu.vnua.fita.student.course.entity.Course;
+
+import java.util.ArrayList;
+import java.util.List;
+
+@Repository
+public class CustomCourseRepository {
+    public static Specification<Course> filterCourseList(String courseId) {
+        return ((root, query, criteriaBuilder) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            if (StringUtils.hasText(courseId)) {
+                predicates.add(criteriaBuilder.like(root.get("id"), courseId));
+            }
+            query.orderBy(criteriaBuilder.desc(root.get("id")));
+            return criteriaBuilder.and(predicates.toArray(new Predicate[0]));
+        });
+    }
+}
